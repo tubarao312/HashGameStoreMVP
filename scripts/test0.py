@@ -1,6 +1,6 @@
-from scripts import deploy, fund_and_withdraw
+from scripts import buy_game, deploy
 
 
 def main():
     deploy.main()
-    fund_and_withdraw.main()
+    buy_game.main()
