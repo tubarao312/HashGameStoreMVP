@@ -13,6 +13,7 @@ contract HashGameStore {
         string title;
         uint256 basePrice;
         Developer developer;
+        uint256 id;
     }
 
     struct GameKey {
@@ -31,8 +32,9 @@ contract HashGameStore {
     }
 
     // Global Variables
-    Player[] players;
-    Developer[] developers;
+    Player[] private players;
+    Developer[] private developers;
+    Game[] private games;
     mapping(string => Game) private titleToGame;
     mapping(string => Player) private usernameToPlayer;
     mapping(address => Player) private addressToPlayer;
@@ -81,11 +83,13 @@ contract HashGameStore {
         Game memory newGame = Game({
             title: title,
             developer: developer,
-            basePrice: price
+            basePrice: price,
+            id: games.length
         });
 
         titleToGame[title] = newGame;
         gameTitleToPrice[title] = price;
+        games.push(newGame);
     }
 
     function generateNewKey(Game memory game) private returns (GameKey memory) {
@@ -143,6 +147,7 @@ contract HashGameStore {
 
         // Adds key to player's library
         addKeyToPlayerLibrary(newKey, player);
+
         // Set Cooldown for Key
         newKey.cooldown = now + 5 minutes;
     }
@@ -161,7 +166,6 @@ contract HashGameStore {
     function listKeyForSale(uint256 keyID, uint256 price) public {
         Player memory player = addressToPlayer[msg.sender];
         GameKey memory key = addressToGameLibrary[player.walletAddress][keyID];
-        //player.gameLibrary[keyID];
 
         // Cooldown needs to be over
         require(key.cooldown < now);
@@ -171,11 +175,32 @@ contract HashGameStore {
         addressToGamesForSale[player.walletAddress].push(key);
         key.id = addressToGamesForSale[player.walletAddress].length;
 
-        //player.gamesForSale.push(key);
-        //player.gameLibrary.remove(key);
-
         // Sets price
         key.price = price;
+    }
+
+    function getGameTitle(uint256 id) public view returns (string memory) {
+        return games[id].title;
+    }
+
+    function getPlayerLibrary(string calldata username)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        // Returns an array with the IDs for all of the player's keys
+        Player memory player = usernameToPlayer[username];
+        GameKey[] memory gameLibrary = addressToGameLibrary[
+            player.walletAddress
+        ];
+        uint256[] memory gameIDArray = new uint256[](gameLibrary.length);
+
+        // Build Array
+        for (uint256 i = 0; i < gameLibrary.length; i++) {
+            gameIDArray[i] = gameLibrary[i].game.id;
+        }
+
+        return gameIDArray;
     }
 
     function buyOldKey(string calldata sellerUsername, uint256 keyID)
