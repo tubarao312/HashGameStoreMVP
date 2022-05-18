@@ -18,6 +18,14 @@ def get_account():
         return accounts.add(config["wallets"]["from_key"])
 
 
+def get_account_player():
+    return accounts.add(config["wallets"]["from_key_player"])
+
+
+def get_account_developer():
+    return accounts.add(config["wallets"]["from_key_developer"])
+
+
 def deploy_mocks():
     print(f"The active network is {network.show_active()}")
     print("Deploying Mocks...")

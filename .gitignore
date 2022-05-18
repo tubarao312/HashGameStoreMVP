@@ -1,6 +1,6 @@
 __pycache__
 .env
 .history
-.hypothesis/
+.hypothegsis/
 build/
 reports/

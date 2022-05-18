@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.6.6;
+pragma solidity >=0.6.0 <0.8.0;
+
+import "./HashToken.sol";
+import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
 
 contract HashGameStore {
     // Structs
@@ -45,12 +48,26 @@ contract HashGameStore {
 
     address payable minter;
 
-    uint256 REVENUE_SHARE = 5; // (5/100) - Percentage that Hash Game Store takes from developers
+    uint256 REVENUE_SHARE = 1; // (1/100) - Percentage that Hash Game Store takes from developers
     uint256 TRADING_COOLDOWN = 5;
+
+    HashToken public token;
+    AggregatorV3Interface internal priceFeed;
 
     // Run when contract is deployed
     constructor() public {
         minter = msg.sender;
+        token = new HashToken(500);
+        priceFeed = AggregatorV3Interface(
+            0x9326BFA02ADD2366b30bacB125260Af641031331
+        );
+    }
+
+    function getLatestETHPrice() public view returns (int256) {
+        (uint80 a, int256 price, uint256 b, uint256 c, uint80 d) = priceFeed
+            .latestRoundData();
+
+        return price;
     }
 
     // Functions
@@ -65,6 +82,16 @@ contract HashGameStore {
         players.push(newPlayer);
         usernameToPlayer[username] = newPlayer;
         addressToPlayer[msg.sender] = newPlayer;
+    }
+
+    function getAddressBalance(address a) public view returns (uint256) {
+        return token.balanceOf(a);
+    }
+
+    function givePlayerTokens(string calldata username, uint256 amount) public {
+        Player memory player = usernameToPlayer[username];
+
+        token.transfer(player.walletAddress, amount);
     }
 
     function developerRegister(string calldata username) public {
@@ -128,19 +155,30 @@ contract HashGameStore {
         );
     }
 
-    function buyOriginalKey(string memory gameTitle) public payable {
+    function buyOriginalKey(string memory gameTitle) public {
         Player memory player = addressToPlayer[msg.sender];
         Game memory game = titleToGame[gameTitle];
         Developer memory developer = game.developer;
 
-        // Check price
-        require(msg.value == game.basePrice);
-
-        // Send (100 - REVENUE_SHARE)% to developer, REVENUE_SHARE% to hash game store
-        developer.walletAddress.transfer(
-            (msg.value * (100 - REVENUE_SHARE)) / 100
+        // Player must have the necessary balance
+        require(
+            token.balanceOf(msg.sender) >= game.basePrice,
+            "The caller didn't have enough Hash tokens"
         );
-        minter.transfer((msg.value * (REVENUE_SHARE)) / 100);
+
+        // Give the contract permission to transfer $HASH
+        require(
+            token.allowance(msg.sender, address(this)) >= game.basePrice,
+            "The caller didn't allow the platform to spend enough Hash tokens on their behalf"
+        );
+
+        // Transfer part to Developer
+        uint256 devRevenue = (game.basePrice * (100 - REVENUE_SHARE)) / 100;
+        token.transferFrom(msg.sender, developer.walletAddress, devRevenue);
+
+        // Transfer part to Hash
+        uint256 hashRevenue = (game.basePrice * (REVENUE_SHARE)) / 100;
+        token.transferFrom(msg.sender, minter, hashRevenue);
 
         // Generates new key
         GameKey memory newKey = generateNewKey(game);
@@ -163,20 +201,8 @@ contract HashGameStore {
             ][keyID].price;
     }
 
-    function listKeyForSale(uint256 keyID, uint256 price) public {
-        Player memory player = addressToPlayer[msg.sender];
-        GameKey memory key = addressToGameLibrary[player.walletAddress][keyID];
-
-        // Cooldown needs to be over
-        require(key.cooldown < now);
-
-        // Adds to marketplace and removes from library
-        removeKeyFromPlayerLibrary(key);
-        addressToGamesForSale[player.walletAddress].push(key);
-        key.id = addressToGamesForSale[player.walletAddress].length;
-
-        // Sets price
-        key.price = price;
+    function getGamePrice(string calldata title) public view returns (uint256) {
+        return titleToGame[title].basePrice;
     }
 
     function getGameTitle(uint256 id) public view returns (string memory) {
@@ -203,26 +229,7 @@ contract HashGameStore {
         return gameIDArray;
     }
 
-    function buyOldKey(string calldata sellerUsername, uint256 keyID)
-        public
-        payable
-    {
-        Player memory buyer = addressToPlayer[msg.sender]; // The player buying the key
-        Player memory seller = usernameToPlayer[sellerUsername]; // The player selling the key
-        GameKey memory key = addressToGamesForSale[seller.walletAddress][keyID]; // The key being transfered
-
-        // Make sure key is for sale and value transfered is enough
-        require(now >= key.cooldown);
-        require(msg.value == key.price);
-
-        // Transfer ETH
-        seller.walletAddress.transfer(msg.value);
-
-        // Transfer Ownership
-        removeKeyFromPlayerLibrary(key);
-        addKeyToPlayerLibrary(key, buyer);
-
-        // Reset trade cooldown
-        key.cooldown = now + 5 minutes;
+    function getToken() public view returns (HashToken) {
+        return token;
     }
 }
