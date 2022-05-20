@@ -17,7 +17,9 @@ def deploy_hashGameStore():
         deploy_mocks()
         price_feed_address = MockV3Aggregator[-1].address
 
-    hashGameStore = HashGameStore.deploy({"from": account})
+    hashGameStore = HashGameStore.deploy(
+        {"from": account}, publish_source=True)
+    #    print(HashGameStore.get_verification_info())
     #    price_feed_address,
     #    {"from": account},
     #    publish_source=config["networks"][network.show_active()].get("verify"),

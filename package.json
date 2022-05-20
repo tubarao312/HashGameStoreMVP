@@ -22,5 +22,8 @@
   "bugs": {
     "url": "https://github.com/tubarao312/HashGameStoreMVP/issues"
   },
-  "homepage": "https://github.com/tubarao312/HashGameStoreMVP#readme"
+  "homepage": "https://github.com/tubarao312/HashGameStoreMVP#readme",
+  "devDependencies": {
+    "verify-on-etherscan": "^1.2.1"
+  }
 }
