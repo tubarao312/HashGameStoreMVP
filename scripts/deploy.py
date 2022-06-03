@@ -19,7 +19,9 @@ def deploy_hashGameStore():
 
     hashGameStore = HashGameStore.deploy(
         {"from": account}, publish_source=True)
+
     #    print(HashGameStore.get_verification_info())
+
     #    price_feed_address,
     #    {"from": account},
     #    publish_source=config["networks"][network.show_active()].get("verify"),

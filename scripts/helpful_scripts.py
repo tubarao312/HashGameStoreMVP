@@ -22,6 +22,10 @@ def get_account_player():
     return accounts.add(config["wallets"]["from_key_player"])
 
 
+def get_account_player_2():
+    return accounts.add(config["wallets"]["from_key_player_2"])
+
+
 def get_account_developer():
     return accounts.add(config["wallets"]["from_key_developer"])
 
