@@ -13,6 +13,9 @@ contract TaxableGameKey {
     // Maps keys to permission to be traded by the marketplace
     mapping(uint256 => bool) public keyApprovedForTransfer;
 
+    // Keeps track of the amount of keys owned by each owner
+    mapping(address => uint256) public ownerToKeyCount;
+
     // Keeps track of total keys minted
     uint256 public totalMinted;
 
@@ -26,7 +29,8 @@ contract TaxableGameKey {
         require(keyApprovedForTransfer[_keyID] == true, "TGK: The key is not approved by the owner for trading");
 
         keyToOwner[_keyID] = _to; // Updates the key's owner
-
+        ownerToKeyCount[msg.sender]--; // Decrements the owner's key count
+        ownerToKeyCount[_to]++; // Increments the new owner's key count
         setApprovedForTrade(_keyID, false); // Updates key's tradibility status to false
     }
 
@@ -44,6 +48,7 @@ contract TaxableGameKey {
         require(!exists(totalMinted), "TGK: key already minted");
 
         keyToOwner[totalMinted] = _to; // Sets key ownership to _to address
+        ownerToKeyCount[_to]++; // Increments the new owner's key count
         totalMinted++; // Increments total keys minted
     }
 
