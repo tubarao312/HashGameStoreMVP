@@ -4,6 +4,7 @@ pragma solidity >=0.6.0 <0.8.0;
 
 import "./Game.sol";
 import "./TaxableGameKey.sol";
+import "./RevenueCutCalculator.sol";
 
 contract KeyMarketplace {
     
@@ -86,15 +87,19 @@ contract KeyMarketplace {
             TODO: Transfer to receiver and key owner 
         */
         
-        uint256 keyOwnerRoyalties = 50; // TEMPORARY REVENUE SHARE
+        RevenueCutCalculator revenueCalculator = RevenueCutCalculator(keyAddressToRevenueCalculator[keyAddress]);
+        uint256 lastTransferDate = keyAddressToKeyIDToLastTimeTrasfered[keyAddress][keyID]; // Gets last time key was traded
+        uint256 keyOwnerRoyalties = revenueCalculator.getResult(lastTransferDate, block.timestamp); // Gets royalties for key owner based on how long they've held the key for
 
         addressToBalance[store] += price * (royalties / 100); // Transfers royalties to store
         price -= (royalties / 100) * price; // Reduces price by store royalties %
         
-        addressToBalance[key.keyToOwner(keyID)] += price * (keyOwnerRoyalties / 100); // Transfers royalties to key owner
+        address keyOwnerAddress = key.keyToOwner(keyID); // Gets key owner address
+        addressToBalance[keyOwnerAddress] += price * (keyOwnerRoyalties / 100); // Transfers royalties to key owner
         price -= (keyOwnerRoyalties / 100) * price; // Reduces price by owner royalties %
 
-        addressToBalance[gameToReceiver[_gameAddress]] += price; // Transfers royalties to receiver
+        address receiverAddress = gameToReceiver[_gameAddress]; // Gets receiver address
+        addressToBalance[receiverAddress] += price; // Transfers royalties to receiver
 
         transferKey(msg.sender, keyAddress, keyID); // Transfer key to msg.sender
         keyAddressToKeyIDToPrice[keyAddress][keyID] = uint256(0); // Removes key from marketplace

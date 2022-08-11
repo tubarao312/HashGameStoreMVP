@@ -27,9 +27,9 @@ contract TaxableGameKey {
     function transferTo(uint256 _keyID, address _to) public {
         require(msg.sender == marketplace, "TGK: msg.sender is not the marketplace address");
         require(keyApprovedForTransfer[_keyID] == true, "TGK: The key is not approved by the owner for trading");
-
+        
+        ownerToKeyCount[keyToOwner[_keyID]]--; // Decrements the owner's key count
         keyToOwner[_keyID] = _to; // Updates the key's owner
-        ownerToKeyCount[msg.sender]--; // Decrements the owner's key count
         ownerToKeyCount[_to]++; // Increments the new owner's key count
         setApprovedForTrade(_keyID, false); // Updates key's tradibility status to false
     }
@@ -55,6 +55,11 @@ contract TaxableGameKey {
     // Returns whether or not a key has been minted
     function exists(uint256 _keyID) internal view returns (bool) {
         return keyToOwner[_keyID] != address(0);
+    }
+
+    // Returns whether or not someone owns more than one key
+    function ownsKey(address _keyOwner) public view returns (bool) {
+        return (ownerToKeyCount[_keyOwner] > 0);
     }
 
 }
