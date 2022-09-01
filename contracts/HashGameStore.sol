@@ -176,7 +176,6 @@ contract HashGameStore {
         uint256 availableQuantity = addressToGameIDToKeysForSale[walletAddress][
             gameID
         ];
-
         Game memory game = games[gameID];
         address developerAddress = game.developerAddress;
 
