@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.8.0;
 
-import "./GameNew.sol";
+import "./Game.sol";
 import "./RevenueCutCalculator.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract KeyMarketplace {
     // Marketplace information
     uint256 public royalties; // How much (0 to 100)% of each transaction the marketplace takes
-    uint256 public owner; // Owner of the contract (Hash Game Store)
+    address public owner; // Owner of the contract (Hash Game Store)
 
     // Maps Game to Receiver Contract
     mapping(address => address payable) public gameToReceiver;
@@ -23,10 +24,16 @@ contract KeyMarketplace {
     mapping(address => uint256) public addressToBalance;
 
     constructor(uint256 _royalties) {
-        royalties = min(100, _royalties);
-        royalties = max(0, royalties);
+        royalties = Math.min(100, _royalties);
+        royalties = Math.max(0, _royalties);
 
         owner = msg.sender;
+    }
+
+    // Makes it so only non-smart-contract addresses can call a function
+    modifier onlyEoa() {
+        require(tx.origin == msg.sender, "Not EOA");
+        _;
     }
 
     // Sets key for sale
@@ -50,7 +57,7 @@ contract KeyMarketplace {
     }
 
     // Buys original new key
-    function buyOriginalKey(address _gameAddress) public payable {
+    function buyOriginalKey(address _gameAddress) public payable onlyEoa {
         Game game = Game(_gameAddress);
 
         uint256 price = gameAddressToOriginalPrice[_gameAddress];
@@ -60,11 +67,7 @@ contract KeyMarketplace {
             "KEY MARKETPLACE: msg.value is not enough to purchase original key"
         );
 
-        /*
-            TODO: Implement Royalties for all parties
-        */
-
-        addressToBalance[store] += price * (royalties / 100); // Transfers royalties to store
+        addressToBalance[owner] += price * (royalties / 100); // Transfers royalties to store
         price -= (royalties / 100) * price; // Reduces price by store royalties %
 
         addressToBalance[gameToReceiver[_gameAddress]] += price; // Transfers royalties to receiver
@@ -73,12 +76,13 @@ contract KeyMarketplace {
     }
 
     // Buys lowest priced key
-    function buyLowestPriceKey(address _gameAddress) public payable {
+    function buyLowestPriceKey(address _gameAddress) public payable onlyEoa {
         Game game = Game(_gameAddress);
         uint256 keyID = getLowestPriceKey(_gameAddress); // Gets keyID of lowest price key
+        address keyOwnerAddress = game.keyToOwner(keyID); // Gets key owner
 
         require(
-            msg.sender == game.keyToOwner(keyID),
+            msg.sender == keyOwnerAddress,
             "KEY MARKETPLACE: msg.sender is not key owner"
         );
 
@@ -88,10 +92,6 @@ contract KeyMarketplace {
             msg.value >= price,
             "KEY MARKETPLACE: msg.value is not enough to buy resold key"
         );
-
-        /*
-            TODO: Transfer to receiver and key owner 
-        */
 
         // Get the deterministic revenue cut calculator contract
         RevenueCutCalculator revenueCalculator = RevenueCutCalculator(
@@ -108,10 +108,10 @@ contract KeyMarketplace {
         );
 
         // Must be between 0 and 100
-        keyOwnerRoyalties = min(100, keyOwnerAddress);
-        keyOwnerRoyalties = max(0, keyOwnerAddress);
+        keyOwnerRoyalties = Math.min(100, keyOwnerRoyalties);
+        keyOwnerRoyalties = Math.max(0, keyOwnerRoyalties);
 
-        /* BIG QUESTION: Let's say a certain game costs $100, developer has 90% resale royalties, 
+        /* QUESTION: Let's say a certain game costs $100, developer has 90% resale royalties, 
         and Hash Game Store has 10% royalties. Our tax is always applied first so we automatically
         get $10. How should the royalties for the developer now work? Should they get 90% of the 
         remaining $90 or should they get $90 and leave the player with 0$?
@@ -125,11 +125,10 @@ contract KeyMarketplace {
         point of view. In my honest opinion we should opt for the first option. */
 
         // Transfers royalties to owner
-        addressToBalance[store] += price * (royalties / 100);
+        addressToBalance[owner] += price * (royalties / 100);
         price -= (royalties / 100) * price; // Reduces price by store royalties %
 
         // Transfer royalties to player
-        address keyOwnerAddress = game.keyToOwner(keyID); // Gets address of current key owner
         addressToBalance[keyOwnerAddress] += price * (keyOwnerRoyalties / 100); // Transfers royalties to key owner
         price -= (keyOwnerRoyalties / 100) * price; // Reduces price by owner royalties %
 
@@ -137,8 +136,8 @@ contract KeyMarketplace {
         address receiverAddress = gameToReceiver[_gameAddress]; // Gets receiver address
         addressToBalance[receiverAddress] += price; // Transfers royalties to receiver
 
-        transferKey(msg.sender, gameAddress, keyID); // Transfer key to msg.sender
-        gameAddressToKeyIDToPrice[gameAddress][keyID] = uint256(0); // Removes key from marketplace
+        transferKey(msg.sender, _gameAddress, keyID); // Transfer key to msg.sender
+        gameAddressToKeyIDToPrice[_gameAddress][keyID] = uint256(0); // Removes key from marketplace
     }
 
     // Returns the lowest priced key for a specific key address (Excluding keys sould by msg.sender)
@@ -150,9 +149,9 @@ contract KeyMarketplace {
         Game game = Game(_gameAddress);
 
         uint256 lowestPrice = uint256(0); // Lowest price found
-        uint256 lowestKeyID = uint256(0); // Lowest key ID found
+        uint256 lowestPricedKeyID = uint256(0); // Lowest key ID found
         bool keyFound = false; // Whether or not a key was found
-        uint256 totalKeysMinted = game.totalMinted();
+        uint256 totalKeysMinted = game.totalKeysMinted();
 
         for (uint256 keyID = 0; keyID < totalKeysMinted; keyID++) {
             if (
@@ -162,10 +161,9 @@ contract KeyMarketplace {
                     gameAddressToKeyIDToPrice[_gameAddress][keyID] <
                     lowestPrice) // Key must be lowest price yet
             ) {
-                    keyFound = true; // At least one key has been found
-                    lowestPrice = gameAddressToKeyIDToPrice[_gameAddress][keyID]; // Sets new lowest price
-                    lowestPricedKeyID = keyID; // Sets new lowest priced key ID
-                }
+                keyFound = true; // At least one key has been found
+                lowestPrice = gameAddressToKeyIDToPrice[_gameAddress][keyID]; // Sets new lowest price
+                lowestPricedKeyID = keyID; // Sets new lowest priced key ID
             }
         }
 
@@ -221,4 +219,4 @@ contract KeyMarketplace {
 
         game.transferTo(_keyID, _to); // Transfer key to _to
     }
-
+}

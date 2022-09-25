@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.8.0;
 
 contract Game {
     // Developer and marketplace addresses
@@ -23,6 +23,10 @@ contract Game {
     uint256 public totalKeysMinted; // Keeps track of total keys minted
     uint256 public maximumKeysMinted; // Keeps track of maximum amount of keys that can be minted
 
+    // Events
+    event KeyTransfered(address from, address to); // Emitted whenever a key is minted or transfered
+
+    // Constructor
     constructor(
         address _developer,
         address _marketplace,
@@ -73,10 +77,13 @@ contract Game {
             "TGK: The key is not approved by the owner for trading"
         );
 
-        ownerToKeyCount[keyToOwner[_keyID]]--; // Decrements the owner's key count
+        address previousKeyOwner = keyToOwner[_keyID]; // Gets previous owner of key
+        emit KeyTransfered(previousKeyOwner, _to); // Emits event
+
+        ownerToKeyCount[previousKeyOwner]--; // Decrements the owner's key count
         keyToOwner[_keyID] = _to; // Updates the key's owner
         ownerToKeyCount[_to]++; // Increments the new owner's key count
-        updateLastTimeTraded(keyID); // Updates last time key was traded
+        updateLastTimeTraded(_keyID); // Updates last time key was traded
         setApprovedForTrade(_keyID, false); // Updates key's tradibility status to false
     }
 
@@ -110,6 +117,7 @@ contract Game {
 
         uint256 keyID = totalKeysMinted;
 
+        emit KeyTransfered(address(0), _to); // Emits event
         keyToOwner[keyID] = _to; // Sets key ownership to _to address
         ownerToKeyCount[_to]++; // Increments the new owner's key count
         updateLastTimeTraded(keyID); // Updates last time key was traded
