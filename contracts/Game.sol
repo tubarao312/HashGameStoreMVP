@@ -2,14 +2,16 @@
 
 pragma solidity ^0.8.0;
 
-contract Game {
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+
+contract GameStorage {
     // Developer and marketplace addresses
     address public developer;
     address public marketplace;
 
     // Download IPFS Links
     uint256 public totalVersions; // Total versions that have been submitted by the developer
-    mapping(uint256 => string) private versionToDownloadLink; // All links to IPFS downloadds submitted by the developer
+    mapping(uint256 => string) internal versionToDownloadLink; // All links to IPFS downloadds submitted by the developer
 
     // Key Information
     mapping(uint256 => address) public keyToOwner; // Maps each key to its owner
@@ -22,16 +24,18 @@ contract Game {
     // Total Key Info
     uint256 public totalKeysMinted; // Keeps track of total keys minted
     uint256 public maximumKeysMinted; // Keeps track of maximum amount of keys that can be minted
+}
 
+contract Game is GameStorage, Initializable {
     // Events
     event KeyTransfered(address from, address to); // Emitted whenever a key is minted or transfered
 
     // Constructor
-    constructor(
+    function initialize(
         address _developer,
         address _marketplace,
         uint256 _maximumKeysMinted
-    ) {
+    ) public initializer {
         developer = _developer;
         marketplace = _marketplace;
         maximumKeysMinted = _maximumKeysMinted;

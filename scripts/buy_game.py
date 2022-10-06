@@ -1,147 +1,57 @@
 from brownie import HashGameStore, HashToken
 from scripts.helpful_scripts import get_account, get_account_player, get_account_developer, get_account_player_2
 
+""" Test Order:
 
-def gameRegister(price, amount, link):  # Registers a game on the developer's behalf
-    hashGameStore = HashGameStore[-1]
-    account = get_account_developer()
+##### CONTRACT INTERACTION ############################################################
+- Register two games on the marketplace: Idle Paladin (1) and Cyberpunk 2077 (2)
+- Developer 1 registers Idle Paladin (1) and Cyberpunk 2077 (2) on the marketplace
+- Player 1 buys Idle Paladin (1) for 1000 tokens
+- Player 1 lists Idle Paladin for sale for 900 tokens
+- Player 2 buys Idle Paladin from Player 1 for 900 tokens
+- Developer 1 withdraws profit from the marketplace
 
-    hashGameStore.gameRegister(price, amount, link, {"from": account})
-
-
-def buyOriginalKey(account, id):  # Buys a key of a game with the player's account
-    hashGameStore = HashGameStore[-1]
-    price = hashGameStore.getOriginalGamePrice(id, {"from": account})
-
-    approve((price), account)
-
-    hashGameStore.buyOriginalKey(id, {"from": account})
-
-
-def listKeyForSale(account, id, quantity, price):  # Lists a game key for sale
-    hashGameStore = HashGameStore[-1]
-
-    hashGameStore.setKeysForSale(id, quantity, price, {"from": account})
-
-
-def buyResoldKey(account, id, quantity):  # Buys a second-hand key of the game
-    hashGameStore = HashGameStore[-1]
-    lowestPrice = hashGameStore.getLowestKeyPrice(id, account)
-
-    approve(lowestPrice * quantity, account)
-
-    hashGameStore.buyLowestPriceKey(id, quantity, {"from": account})
-
-
-def getGamePrice(id):  # Returns the price of a game
-    hashGameStore = HashGameStore[-1]
-
-    return hashGameStore.getOriginalGamePrice(id)
-
-
-def fundAccount(account, amount):  # Gives the player tokens
-    hashGameStore = HashGameStore[-1]
-
-    hashGameStore.acquireHashTokens(amount, {"from": account})
-
-
-def getTokenAddress():  # Gets the address of the token contract
-    hashGameStore = HashGameStore[-1]
-
-    return hashGameStore.getTokenAddress()
-
-
-def approve(amount, account):  # Approves the HGS Contract to spend Hash Tokens on the player's behalf
-    hashGameStore = HashGameStore[-1]
-    token = HashToken.at(getTokenAddress())
-
-    token.approve(hashGameStore, amount, {"from": account})
-
-
-def getAddressBalance(address):  # Gets the Hash Token Balance of a specific wallet
-    hashGameStore = HashGameStore[-1]
-
-    return hashGameStore.getAddressBalance(address)
-
-
-def getWalletKeys(gameID, address):
-    hashGameStore = HashGameStore[-1]
-
-    return hashGameStore.getKeysForAddress(address, gameID)
-
+"""
 
 def main():
+    # Get accounts
+    account = get_account()
+    account_player = get_account_player()
+    account_developer = get_account_developer()
+    account_player_2 = get_account_player_2()
 
-    # Print ERC20 Token Contract Address
-    print("Token contract address: " + str(getTokenAddress()))
-    print("-----------------------------------------------------------")
+    # Get contracts
+    hash_game_store = HashGameStore[-1]
+    hash_token = HashToken[-1]
 
-    # Fund Player
-    account1 = get_account_player()
-    account2 = get_account_player_2()
+    # Register two games on the marketplace: Idle Paladin (1) and Cyberpunk 2077 (2)
+    hash_game_store.registerGame("Idle Paladin", "Idle Paladin is a game about a paladin who idles.", {"from": account_developer})
+    hash_game_store.registerGame("Cyberpunk 2077", "Cyberpunk 2077 is a game about a cyberpunk.", {"from": account_developer})
 
-    fundAccount(account1, 1000000000000000000000)
-    print("Gave the player Pedro 1000 HASH")
-    print("-----------------------------------------------------------")
-    fundAccount(account2, 500000000000000000000)
-    print("Gave the player Leandro 500 HASH")
-    print("-----------------------------------------------------------")
+    # Developer 1 registers Idle Paladin (1) and Cyberpunk 2077 (2) on the marketplace
+    hash_game_store.registerGameOnMarketplace(1, {"from": account_developer})
+    hash_game_store.registerGameOnMarketplace(2, {"from": account_developer})
 
-    # Register Games
+    # Player 1 buys Idle Paladin (1) for 1000 tokens
+    hash_token.approve(hash_game_store.address, 1000, {"from": account_player})
+    hash_game_store.buyGame(1, {"from": account_player})
 
-    # IPFS Link to download Idle Paladin - Used for all games for testing purposes
-    ipLink = 'https://bafybeihhpjgk6lo42qppiwjgtztvcr3clcpizgqckrvg4rlnsw6mtd6uc4.ipfs.dweb.link/Idle%20Paladin.exe'
+    # Player 1 lists Idle Paladin for sale for 900 tokens
+    hash_game_store.listGameForSale(1, 900, {"from": account_player})
 
-    idlePaladinID = gameRegister(19990000000000000000, 0, ipLink)  # gameID = 0
-    print("Registered Game 'Idle Paladin' for 19.99 HASH")
-    print("-----------------------------------------------------------")
-    rdrID = gameRegister(29990000000000000000, 0, ipLink)  # gameID = 1
-    print("Registered Game 'Red Dead Redemption II' for 29.99 HASH")
-    print("-----------------------------------------------------------")
-    fifaID = gameRegister(34990000000000000000, 0, ipLink)  # gameID = 2
-    print("Registered Game 'FIFA 22' for 34.99 HASH")
-    print("-----------------------------------------------------------")
-    cpID = gameRegister(59990000000000000000, 0, ipLink)  # gameID = 3
-    print("Registered Game 'Cyberpunk 2077' for 59.99 HASH")
-    print("-----------------------------------------------------------")
+    # Player 2 buys Idle Paladin from Player 1 for 900 tokens
+    hash_token.approve(hash_game_store.address, 900, {"from": account_player_2})
+    hash_game_store.buyGameFromPlayer(1, {"from": account_player_2})
 
-    # Know accounts' tokens
-    print("Pedro's balance is: " + str(getAddressBalance(account1)))
-    print("Leandro's balance is: " + str(getAddressBalance(account2)))
-    print("Developers's balance is: " +
-          str(getAddressBalance(get_account_developer())))
-    print("Hash Game Stores's balance is: " +
-          str(getAddressBalance(HashGameStore[-1])))
-    print("-----------------------------------------------------------")
+    # Developer 1 withdraws profit from the marketplace
+    hash_game_store.withdrawProfit({"from": account_developer})
 
-    # Player buys games
-    buyOriginalKey(account1, 0)
-    print("Pedro buys Idle Paladin")
+    # Player 1 lists Idle Paladin for sale for 900 tokens
+    hash_game_store.listGameForSale(1, 900, {"from": account_player})
 
-    print("Idle Paladin download link is the following:")
-    print(
-        HashGameStore[-1].getGameDownloadLink(idlePaladinID, {"from": account1}))
+    # Player 2 buys Idle Paladin from Player 1 for 900 tokens
+    hash_token.approve(hash_game_store.address, 900, {"from": account_player_2})
+    hash_game_store.buyGameFromPlayer(1, {"from": account_player_2})
 
-    # Player 1 lists games for reselling
-    listKeyForSale(account1, 0, 1, 2500000000000000000)
-    print("Pedro lists Idle Paladin key for sale")
-    print("-----------------------------------------------------------")
-
-    # Player 2 buys game from Player 1
-    buyResoldKey(account2, 0, 1)
-    print("Leandro buys a copy of Idle Paladin from Pedro")
-    print("-----------------------------------------------------------")
-
-    # Player 2 lists games for reselling
-    listKeyForSale(account2, 0, 1, 2500000000000000000)
-    print("Leandro lists Idle Paladin key for sale")
-    print("-----------------------------------------------------------")
-
-    # Know accounts' tokens
-    print("Pedro's balance is: " + str(getAddressBalance(account1)))
-    print("Leandro's balance is: " + str(getAddressBalance(account2)))
-    print("Developers's balance is: " +
-          str(getAddressBalance(get_account_developer())))
-    print("Hash Game Stores's balance is: " +
-          str(getAddressBalance(HashGameStore[-1])))
-    print("-----------------------------------------------------------")
+    # Developer 1 withdraws profit from the marketplace
+    hash_game_store.withdrawProfit

@@ -4,35 +4,57 @@ pragma solidity ^0.8.0;
 
 import "./Game.sol";
 import "./RevenueCutCalculator.sol";
+import "./Proxy.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract KeyMarketplace {
+contract KeyMarketplaceStorage {
     // Marketplace information
-    uint256 public royalties; // How much (0 to 100)% of each transaction the marketplace takes
+    uint256 public royalties; // How much (0 to 100)% of each transaction the marketplace takes in standard
     address public owner; // Owner of the contract (Hash Game Store)
-
-    // Maps Game to Receiver Contract
-    mapping(address => address payable) public gameToReceiver;
 
     // Game Information
     mapping(address => mapping(uint256 => uint256))
         public gameAddressToKeyIDToPrice; // Maps game contract to key ID to price of said key
     mapping(address => address) public gameAddressToRevenueCalculator; // Maps key address to revenue share calculator between key reseller and publisher
     mapping(address => uint256) public gameAddressToOriginalPrice; // Maps Keys Contract to Original (New) Key Price
+    mapping(address => uint256) public gameAddressToRoyalties; // Maps game to royalties
+    mapping(address => address payable) public gameAddressToReceiver; // Maps game to receiver
 
     // Maps how much revenue has been accumulated for each address (be it developer or store)
     mapping(address => uint256) public addressToBalance;
 
-    constructor(uint256 _royalties) {
+    // Beacon Address for game deployment
+    address public gameBeaconAddress;
+}
+
+contract KeyMarketplace is KeyMarketplaceStorage, Initializable {
+    // Constructor for upgradeable smart contracts
+    function initialize(
+        address _storeWallet,
+        uint256 _royalties,
+        address _gameBeaconAddress
+    ) public initializer {
         royalties = Math.min(100, _royalties);
         royalties = Math.max(0, _royalties);
 
-        owner = msg.sender;
+        owner = _storeWallet;
+
+        gameBeaconAddress = _gameBeaconAddress;
+    }
+
+    // Withdrawls Balance from the contract
+    function withdrawBalance() public {
+        payable(msg.sender).transfer(addressToBalance[msg.sender]);
     }
 
     // Makes it so only non-smart-contract addresses can call a function
     modifier onlyEoa() {
-        require(tx.origin == msg.sender, "Not EOA");
+        require(
+            tx.origin == msg.sender,
+            "MARKETPLACE: Only EOAs can call this function."
+        );
         _;
     }
 
@@ -70,7 +92,7 @@ contract KeyMarketplace {
         addressToBalance[owner] += price * (royalties / 100); // Transfers royalties to store
         price -= (royalties / 100) * price; // Reduces price by store royalties %
 
-        addressToBalance[gameToReceiver[_gameAddress]] += price; // Transfers royalties to receiver
+        addressToBalance[gameAddressToReceiver[_gameAddress]] += price; // Transfers royalties to receiver
 
         game.mint(msg.sender); // Mints key to msg.sender
     }
@@ -133,7 +155,7 @@ contract KeyMarketplace {
         price -= (keyOwnerRoyalties / 100) * price; // Reduces price by owner royalties %
 
         // Transfer royalties to developer
-        address receiverAddress = gameToReceiver[_gameAddress]; // Gets receiver address
+        address receiverAddress = gameAddressToReceiver[_gameAddress]; // Gets receiver address
         addressToBalance[receiverAddress] += price; // Transfers royalties to receiver
 
         transferKey(msg.sender, _gameAddress, keyID); // Transfer key to msg.sender
@@ -175,6 +197,21 @@ contract KeyMarketplace {
         return lowestPricedKeyID;
     }
 
+    // Sets a specific game's royalties
+    function setGameRoyalties(address _gameAddress, uint256 _royalties) public {
+        require(
+            msg.sender == owner,
+            "KEY MARKETPLACE: Only owner can set game royalties"
+        );
+
+        require(
+            _royalties <= 100 && _royalties >= 0,
+            "KEY MARKETPLACE: Royalties must be between 0 and 100"
+        );
+
+        gameAddressToRoyalties[_gameAddress] = _royalties;
+    }
+
     // Registers a new game on the platform or binds it to a new. Keep maximum keys as <= 0 for infinite keys
     function registerNewGame(
         address _developer,
@@ -182,10 +219,13 @@ contract KeyMarketplace {
         uint256 _originalKeyPrice,
         uint256 _maximumKeys
     ) public {
-        Game game = new Game(_developer, address(this), _maximumKeys); // Creates a new game tethered to this marketplace
+        Proxy proxy = new Proxy(gameBeaconAddress); // Deploys proxy hooked to game beacon
+        Game game = Game(address(proxy)); // Converts proxy to game instance
+        game.initialize(_developer, address(this), _maximumKeys); // Creates a new game tethered to this marketplace
 
-        gameToReceiver[address(game)] = _receiver; // Sets receiver for game's revenue
+        gameAddressToReceiver[address(game)] = _receiver; // Sets receiver for game's revenue
         gameAddressToOriginalPrice[address(game)] = _originalKeyPrice; // Sets original key price for game
+        gameAddressToRoyalties[address(game)] = royalties; // Sets royalties for game
     }
 
     // Returns a game's download link to the player
